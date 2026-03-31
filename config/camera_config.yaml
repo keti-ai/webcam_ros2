@@ -1,15 +1,24 @@
 webcam_node:
   ros__parameters:
     cameras:
-      - id: 0
+      - id: 1
         name: "front"
         width: 1280
         height: 720
         fps: 30
-        serial_number: "187C02F5"   # udevadm info /dev/video0 | grep ID_SERIAL_SHORT
-      # - id: 1
-      #   name: "side"
-      #   width: 640
-      #   height: 480
+        serial_number: ""   # udevadm info /dev/video0 | grep ID_SERIAL_SHORT
+        power_line_frequency: 2  # 0: disabled, 1: 50Hz, 2: 60Hz
+      - id: 3
+        name: "side"
+        width: 1280
+        height: 720
+        fps: 30
+        serial_number: ""   # udevadm info /dev/video1 | grep ID_SERIAL_SHORT
+        power_line_frequency: 2  # 0: disabled, 1: 50Hz, 2: 60Hz
+      # - id: 4
+      #   name: "rear"
+      #   width: 1280
+      #   height: 720
       #   fps: 30
-      #   serial_number: "187C02F5"   # udevadm info /dev/video1 | grep ID_SERIAL_SHORT
+      #   serial_number: ""   # udevadm info /dev/video1 | grep ID_SERIAL_SHORT
+      #   power_line_frequency: 2
