@@ -32,7 +32,6 @@ setup(
     entry_points={
         'console_scripts': [
             'webcam_node = webcam_ros2.webcam:main',
-            'webcam_multi_node = webcam_ros2.webcam_multi:main',
         ],
     },
 )
