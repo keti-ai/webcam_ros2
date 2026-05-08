@@ -109,7 +109,7 @@ class WebcamNode(Node):
                 return
             frame = self.latest_frame
 
-        frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
+        # frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_LINEAR)
 
         msg = CompressedImage()
         msg.header.stamp = self.get_clock().now().to_msg()
