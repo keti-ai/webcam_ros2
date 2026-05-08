@@ -3,11 +3,16 @@ import subprocess
 import threading
 
 import cv2
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
-from turbojpeg import TurboJPEG, TJPF_BGR
-
+try:
+    # from turbojpeg import TurboJPEG, TJPF_BGR
+    ENCODE = 'turbojpeg'
+except Exception as e:
+    ENCODE = 'cv'   
+ENCODE = 'cv'   
 
 class WebcamNode(Node):
     def __init__(self):
@@ -19,6 +24,7 @@ class WebcamNode(Node):
         self.declare_parameter('height',               480)
         self.declare_parameter('fps',                  30)
         self.declare_parameter('serial_number',        '')
+        self.declare_parameter('topic',                '')
         self.declare_parameter('power_line_frequency', -1)
 
         cam_id              = self.get_parameter('camera_id').value
@@ -27,6 +33,7 @@ class WebcamNode(Node):
         height              = self.get_parameter('height').value
         fps                 = self.get_parameter('fps').value
         serial_number       = self.get_parameter('serial_number').value
+        topic               = self.get_parameter('topic').value
         power_line_freq     = self.get_parameter('power_line_frequency').value
 
         if serial_number:
@@ -63,7 +70,8 @@ class WebcamNode(Node):
             self.get_logger().error(f'[{cam_name}] 카메라(id={cam_id})를 열 수 없습니다.')
             raise RuntimeError(f'Cannot open camera id={cam_id}')
 
-        self.jpeg = TurboJPEG()
+        if ENCODE == 'turbojpeg':
+            self.jpeg = TurboJPEG()
         self.cam_name = cam_name
         self.latest_frame = None
         self.frame_lock = threading.Lock()
@@ -71,7 +79,6 @@ class WebcamNode(Node):
         self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._capture_thread.start()
 
-        topic = f'{cam_name}/color/image_raw/compressed'
         self.publisher = self.create_publisher(CompressedImage, topic, 10)
         self.timer = self.create_timer(1.0 / fps, self.publish_image)
 
@@ -114,7 +121,11 @@ class WebcamNode(Node):
         msg = CompressedImage()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.format = 'jpeg'
-        msg.data = self.jpeg.encode(frame, pixel_format=TJPF_BGR)
+        if ENCODE == 'turbojpeg':
+            d = self.jpeg.encode(frame, pixel_format=TJPF_BGR)
+        elif ENCODE == 'cv':
+            d = np.array(cv2.imencode('.jpg', frame)[1]).tobytes()
+        msg.data = d
 
         self.publisher.publish(msg)
 

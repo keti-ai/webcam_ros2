@@ -31,6 +31,7 @@ def generate_launch_description():
                 'height':               cam['height'],
                 'fps':                  cam['fps'],
                 'serial_number':        cam['serial_number'],
+                'topic':                cam['topic'],
                 'power_line_frequency': cam.get('power_line_frequency', -1),
             }],
             output='screen',
