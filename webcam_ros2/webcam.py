@@ -1,4 +1,8 @@
+import ctypes
+import fcntl
 import glob
+import os
+import re
 import subprocess
 import threading
 
@@ -87,21 +91,133 @@ class WebcamNode(Node):
         )
 
     def find_camera_by_serial(self, serial_number: str) -> int:
-        for dev_path in sorted(glob.glob('/dev/video*')):
-            try:
-                result = subprocess.run(
-                    ['udevadm', 'info', dev_path],
-                    capture_output=True, text=True, timeout=2
-                )
-                for line in result.stdout.splitlines():
-                    if line.strip().startswith('E: ID_SERIAL_SHORT='):
-                        found_serial = line.strip().split('=', 1)[1]
-                        if found_serial == serial_number:
-                            dev_index = int(dev_path.replace('/dev/video', ''))
-                            return dev_index
-            except (subprocess.TimeoutExpired, ValueError):
+        """serial_number 가 일치하면서 실제 영상 캡처가 가능한 /dev/videoN 을 찾는다.
+
+        USB 카메라 하나가 여러 개의 /dev/videoN 을 만드는 경우가 많다
+        (예: Arducam UC684 -> video6~video9). 이 중 VIDEO_CAPTURE 능력이 있는
+        노드만 실제로 열 수 있으므로, serial 이 맞더라도 capture 노드인지
+        반드시 확인해야 한다.
+        """
+        candidates = []
+        for dev_path in glob.glob('/dev/video*'):
+            m = re.fullmatch(r'/dev/video(\d+)', dev_path)
+            if not m:
                 continue
+            dev_index = int(m.group(1))
+
+            sysfs = f'/sys/class/video4linux/video{dev_index}'
+            found_serial = self._read_sysfs_serial(sysfs)
+            if found_serial is None or found_serial != serial_number:
+                continue
+
+            # 같은 카메라의 여러 노드 중 index 가 작은 쪽이 보통 capture 노드다.
+            try:
+                with open(f'{sysfs}/index') as f:
+                    order = int(f.read().strip())
+            except (OSError, ValueError):
+                order = dev_index
+
+            candidates.append((order, dev_index))
+
+        if not candidates:
+            return -1
+
+        candidates.sort()
+        denied = []
+        unknown = []
+        for _, dev_index in candidates:
+            status = self._is_capture_device(dev_index)
+            if status is True:
+                return dev_index
+            if status == 'permission_denied':
+                denied.append(dev_index)
+            elif status == 'unknown':
+                unknown.append(dev_index)
+
+        if denied and not unknown:
+            # 전부 권한 문제라면 추측해서 진행해봐야 OpenCV 쪽에서
+            # 원인을 알기 어려운 에러로 다시 실패한다. 여기서 명확히 끊는다.
+            nodes = ', '.join(f'/dev/video{i}' for i in denied)
+            raise PermissionError(
+                f'serial={serial_number} 카메라({nodes})에 접근할 수 없습니다. '
+                f'현재 사용자를 video 그룹에 추가한 뒤 다시 로그인하세요: '
+                f'sudo usermod -aG video $USER'
+            )
+
+        if unknown:
+            # QUERYCAP 을 지원하지 않는 환경 -> 기존처럼 첫 후보로 진행
+            first = unknown[0]
+            self.get_logger().warn(
+                f'serial={serial_number}: capture 능력을 확인할 수 없어 '
+                f'/dev/video{first} 로 진행합니다.'
+            )
+            return first
+
         return -1
+
+    @staticmethod
+    def _read_sysfs_serial(sysfs_path: str):
+        """video 노드가 속한 USB device 의 serial 을 sysfs 에서 읽는다."""
+        try:
+            device = os.path.realpath(os.path.join(sysfs_path, 'device'))
+        except OSError:
+            return None
+
+        # USB device 디렉토리(serial 파일이 있는 곳)까지 상위로 올라간다.
+        for _ in range(6):
+            serial_file = os.path.join(device, 'serial')
+            if os.path.isfile(serial_file):
+                try:
+                    with open(serial_file) as f:
+                        return f.read().strip()
+                except OSError:
+                    return None
+            parent = os.path.dirname(device)
+            if parent == device:
+                break
+            device = parent
+        return None
+
+    def _is_capture_device(self, dev_index: int):
+        """VIDIOC_QUERYCAP 으로 VIDEO_CAPTURE 능력을 확인한다.
+
+        True / False 외에 'permission_denied'(권한 없음), 'unknown'(QUERYCAP
+        미지원)을 반환하여 호출측이 상황을 구분할 수 있게 한다.
+        """
+        V4L2_CAP_VIDEO_CAPTURE = 0x00000001
+        V4L2_CAP_DEVICE_CAPS   = 0x80000000
+        VIDIOC_QUERYCAP        = 0x80685600
+
+        class _Capability(ctypes.Structure):
+            _fields_ = [
+                ('driver',       ctypes.c_char * 16),
+                ('card',         ctypes.c_char * 32),
+                ('bus_info',     ctypes.c_char * 32),
+                ('version',      ctypes.c_uint32),
+                ('capabilities', ctypes.c_uint32),
+                ('device_caps',  ctypes.c_uint32),
+                ('reserved',     ctypes.c_uint32 * 3),
+            ]
+
+        cap = _Capability()
+        try:
+            fd = os.open(f'/dev/video{dev_index}', os.O_RDONLY | os.O_NONBLOCK)
+        except PermissionError:
+            # 노드는 존재하지만 권한이 없다. 능력을 알 수 없는 것과는 다르므로
+            # 호출측이 명확한 안내를 할 수 있게 구분해서 알린다.
+            return 'permission_denied'
+        except OSError as e:
+            self.get_logger().warn(f'/dev/video{dev_index} 열기 실패: {e}')
+            return False
+        try:
+            fcntl.ioctl(fd, VIDIOC_QUERYCAP, cap)
+        except OSError:
+            return 'unknown'
+        finally:
+            os.close(fd)
+
+        caps = cap.device_caps if cap.capabilities & V4L2_CAP_DEVICE_CAPS else cap.capabilities
+        return bool(caps & V4L2_CAP_VIDEO_CAPTURE)
 
     def _capture_loop(self):
         while rclpy.ok() and self.cap.isOpened():

@@ -24,11 +24,11 @@ setup(
     maintainer_email='moonjongsul@gmail.com',
     description='Multi-webcam publisher with compressed image output for ROS2',
     license='Apache-2.0',
-    extras_require={
-        'test': [
-            'pytest',
-        ],
-    },
+    # extras_require={
+    #     'test': [
+    #         'pytest',
+    #     ],
+    # },
     entry_points={
         'console_scripts': [
             'webcam_node = webcam_ros2.webcam:main',

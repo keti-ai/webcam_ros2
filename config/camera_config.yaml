@@ -1,12 +1,12 @@
 webcam_node:
   ros__parameters:
     cameras:
-      - id: 0
+      - id: 6
         name: "env"
         width: 640
         height: 480
         fps: 30
-        serial_number: ""   # udevadm info /dev/video0 | grep ID_SERIAL_SHORT
+        serial_number: "UC684"   # Arducam 1080P Low Light (0c45:0261) -> /dev/video6
         topic: "/observation/env/color/image_raw/compressed"
         # power_line_frequency: 2  # 0: disabled, 1: 50Hz, 2: 60Hz
       # - id: 3
