@@ -1,25 +1,30 @@
 webcam_node:
   ros__parameters:
+    # 장치 지정 우선순위: device_path > serial_number > id
+    # device_path 는 ./find_cameras.sh 출력값 사용 (USB 포트 기준이라 포트를 바꾸면 갱신 필요)
     cameras:
-      - id: 6
-        name: "env"
+      - id: 4
+        name: "left"
         width: 640
         height: 480
         fps: 30
-        serial_number: "UC684"   # Arducam 1080P Low Light (0c45:0261) -> /dev/video6
-        topic: "/observation/env/color/image_raw/compressed"
+        serial_number: ""   # USB 2.0 Camera (0c45:6340) 는 시리얼 없음
+        device_path: "/dev/v4l/by-path/pci-0000:c8:00.0-usb-0:2.2:1.0-video-index0"  # 허브 2.2 포트
+        topic: "/observation/left/color/image_raw/compressed"
         # power_line_frequency: 2  # 0: disabled, 1: 50Hz, 2: 60Hz
-      # - id: 3
-      #   name: "side"
-      #   width: 1280
-      #   height: 720
+      - id: 6
+        name: "right"
+        width: 640
+        height: 480
+        fps: 30
+        serial_number: ""
+        device_path: "/dev/v4l/by-path/pci-0000:c8:00.0-usb-0:2.3:1.0-video-index0"  # 허브 2.3 포트
+        topic: "/observation/right/color/image_raw/compressed"
+        # power_line_frequency: 2
+      # - id: 6
+      #   name: "env"
+      #   width: 640
+      #   height: 480
       #   fps: 30
-      #   serial_number: ""   # udevadm info /dev/video1 | grep ID_SERIAL_SHORT
-      #   power_line_frequency: 2  # 0: disabled, 1: 50Hz, 2: 60Hz
-      # - id: 4
-      #   name: "rear"
-      #   width: 1280
-      #   height: 720
-      #   fps: 30
-      #   serial_number: ""   # udevadm info /dev/video1 | grep ID_SERIAL_SHORT
-      #   power_line_frequency: 2
+      #   serial_number: "UC684"   # Arducam 1080P Low Light (0c45:0261)
+      #   topic: "/observation/env/color/image_raw/compressed"

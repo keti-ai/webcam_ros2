@@ -30,6 +30,7 @@ class WebcamNode(Node):
         self.declare_parameter('serial_number',        '')
         self.declare_parameter('topic',                '')
         self.declare_parameter('power_line_frequency', -1)
+        self.declare_parameter('device_path',          '')
 
         cam_id              = self.get_parameter('camera_id').value
         cam_name            = self.get_parameter('camera_name').value
@@ -39,8 +40,20 @@ class WebcamNode(Node):
         serial_number       = self.get_parameter('serial_number').value
         topic               = self.get_parameter('topic').value
         power_line_freq     = self.get_parameter('power_line_frequency').value
+        device_path         = self.get_parameter('device_path').value
 
-        if serial_number:
+        # 우선순위: device_path > serial_number > camera_id
+        if device_path:
+            real = os.path.realpath(device_path)
+            m = re.fullmatch(r'/dev/video(\d+)', real)
+            if not os.path.exists(device_path) or not m:
+                self.get_logger().error(
+                    f'[{cam_name}] device_path={device_path} 에 해당하는 카메라를 찾을 수 없습니다.'
+                )
+                raise RuntimeError(f'Cannot find camera at device_path={device_path}')
+            cam_id = int(m.group(1))
+            self.get_logger().info(f'[{cam_name}] device_path={device_path} → {real} 매칭')
+        elif serial_number:
             cam_id = self.find_camera_by_serial(serial_number)
             if cam_id == -1:
                 self.get_logger().error(
